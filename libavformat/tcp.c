@@ -47,6 +47,7 @@ typedef struct TCPContext {
     int recv_buffer_size;
     int send_buffer_size;
     int tcp_nodelay;
+<<<<<<< HEAD
     char * app_ctx_intptr;
 
     int addrinfo_one_by_one;
@@ -59,6 +60,11 @@ typedef struct TCPContext {
     int fastopen;
     int tcp_connected;
     int fastopen_success;
+=======
+#if !HAVE_WINSOCK2_H
+    int tcp_mss;
+#endif /* !HAVE_WINSOCK2_H */
+>>>>>>> release/4.4
 } TCPContext;
 
 #define FAST_OPEN_FLAG 0x20000000
@@ -74,6 +80,7 @@ static const AVOption options[] = {
     { "send_buffer_size", "Socket send buffer size (in bytes)",                OFFSET(send_buffer_size), AV_OPT_TYPE_INT, { .i64 = -1 },         -1, INT_MAX, .flags = D|E },
     { "recv_buffer_size", "Socket receive buffer size (in bytes)",             OFFSET(recv_buffer_size), AV_OPT_TYPE_INT, { .i64 = -1 },         -1, INT_MAX, .flags = D|E },
     { "tcp_nodelay", "Use TCP_NODELAY to disable nagle's algorithm",           OFFSET(tcp_nodelay), AV_OPT_TYPE_BOOL, { .i64 = 0 },             0, 1, .flags = D|E },
+<<<<<<< HEAD
     { "ijkapplication",   "AVApplicationContext",                              OFFSET(app_ctx_intptr),   AV_OPT_TYPE_STRING, { .str = NULL }, 0, 0, .flags = D },
 
     { "addrinfo_one_by_one",  "parse addrinfo one by one in getaddrinfo()",    OFFSET(addrinfo_one_by_one), AV_OPT_TYPE_INT, { .i64 = 0 },         0, 1, .flags = D|E },
@@ -81,6 +88,11 @@ static const AVOption options[] = {
     { "dns_cache_timeout", "dns cache TTL (in microseconds)",   OFFSET(dns_cache_timeout), AV_OPT_TYPE_INT, { .i64 = 0 },       -1, INT64_MAX, .flags = D|E },
     { "dns_cache_clear", "clear dns cache",   OFFSET(dns_cache_clear), AV_OPT_TYPE_INT, { .i64 = 0},       -1, INT_MAX, .flags = D|E },
     { "fastopen", "enable fastopen",          OFFSET(fastopen), AV_OPT_TYPE_INT, { .i64 = 0},       0, INT_MAX, .flags = D|E },
+=======
+#if !HAVE_WINSOCK2_H
+    { "tcp_mss",     "Maximum segment size for outgoing TCP packets",          OFFSET(tcp_mss),     AV_OPT_TYPE_INT, { .i64 = -1 },         -1, INT_MAX, .flags = D|E },
+#endif /* !HAVE_WINSOCK2_H */
+>>>>>>> release/4.4
     { NULL }
 };
 
@@ -91,6 +103,7 @@ static const AVClass tcp_class = {
     .version    = LIBAVUTIL_VERSION_INT,
 };
 
+<<<<<<< HEAD
 int ijk_tcp_getaddrinfo_nonblock(const char *hostname, const char *servname,
                                  const struct addrinfo *hints, struct addrinfo **res,
                                  int64_t timeout,
@@ -339,6 +352,37 @@ int ijk_tcp_getaddrinfo_nonblock(const char *hostname, const char *servname,
 }
 #endif
 
+=======
+static void customize_fd(void *ctx, int fd)
+{
+    TCPContext *s = ctx;
+    /* Set the socket's send or receive buffer sizes, if specified.
+       If unspecified or setting fails, system default is used. */
+    if (s->recv_buffer_size > 0) {
+        if (setsockopt (fd, SOL_SOCKET, SO_RCVBUF, &s->recv_buffer_size, sizeof (s->recv_buffer_size))) {
+            ff_log_net_error(ctx, AV_LOG_WARNING, "setsockopt(SO_RCVBUF)");
+        }
+    }
+    if (s->send_buffer_size > 0) {
+        if (setsockopt (fd, SOL_SOCKET, SO_SNDBUF, &s->send_buffer_size, sizeof (s->send_buffer_size))) {
+            ff_log_net_error(ctx, AV_LOG_WARNING, "setsockopt(SO_SNDBUF)");
+        }
+    }
+    if (s->tcp_nodelay > 0) {
+        if (setsockopt (fd, IPPROTO_TCP, TCP_NODELAY, &s->tcp_nodelay, sizeof (s->tcp_nodelay))) {
+            ff_log_net_error(ctx, AV_LOG_WARNING, "setsockopt(TCP_NODELAY)");
+        }
+    }
+#if !HAVE_WINSOCK2_H
+    if (s->tcp_mss > 0) {
+        if (setsockopt (fd, IPPROTO_TCP, TCP_MAXSEG, &s->tcp_mss, sizeof (s->tcp_mss))) {
+            ff_log_net_error(ctx, AV_LOG_WARNING, "setsockopt(TCP_MAXSEG)");
+        }
+    }
+#endif /* !HAVE_WINSOCK2_H */
+}
+
+>>>>>>> release/4.4
 /* return non zero if error */
 static int tcp_open(URLContext *h, const char *uri, int flags)
 {
@@ -436,7 +480,6 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
         cur_ai = dns_entry->res;
     }
 
- restart:
 #if HAVE_STRUCT_SOCKADDR_IN6
     // workaround for IOS9 getaddrinfo in IPv6 only network use hardcode IPv4 address can not resolve port number.
     if (cur_ai->ai_family == AF_INET6){
@@ -447,24 +490,19 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
     }
 #endif
 
-    fd = ff_socket(cur_ai->ai_family,
-                   cur_ai->ai_socktype,
-                   cur_ai->ai_protocol);
-    if (fd < 0) {
-        ret = ff_neterrno();
-        goto fail;
-    }
-
-    /* Set the socket's send or receive buffer sizes, if specified.
-       If unspecified or setting fails, system default is used. */
-    if (s->recv_buffer_size > 0) {
-        setsockopt (fd, SOL_SOCKET, SO_RCVBUF, &s->recv_buffer_size, sizeof (s->recv_buffer_size));
-    }
-    if (s->send_buffer_size > 0) {
-        setsockopt (fd, SOL_SOCKET, SO_SNDBUF, &s->send_buffer_size, sizeof (s->send_buffer_size));
-    }
-    if (s->tcp_nodelay > 0) {
-        setsockopt (fd, IPPROTO_TCP, TCP_NODELAY, &s->tcp_nodelay, sizeof (s->tcp_nodelay));
+    if (s->listen > 0) {
+        while (cur_ai && fd < 0) {
+            fd = ff_socket(cur_ai->ai_family,
+                           cur_ai->ai_socktype,
+                           cur_ai->ai_protocol);
+            if (fd < 0) {
+                ret = ff_neterrno();
+                cur_ai = cur_ai->ai_next;
+            }
+        }
+        if (fd < 0)
+            goto fail1;
+        customize_fd(s, fd);
     }
 
     if (s->listen == 2) {
@@ -479,6 +517,7 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
         // Socket descriptor already closed here. Safe to overwrite to client one.
         fd = ret;
     } else {
+<<<<<<< HEAD
         ret = av_application_on_tcp_will_open(s->app_ctx);
         if (ret) {
             av_log(NULL, AV_LOG_WARNING, "terminated by application in AVAPP_CTRL_WILL_TCP_OPEN");
@@ -507,6 +546,11 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
             }
             av_log(NULL, AV_LOG_INFO, "tcp did open uri = %s, ip = %s\n", uri , control.ip);
         }
+=======
+        ret = ff_connect_parallel(ai, s->open_timeout / 1000, 3, h, &fd, customize_fd, s);
+        if (ret < 0)
+            goto fail1;
+>>>>>>> release/4.4
     }
 
     h->is_streamed = 1;
@@ -519,15 +563,6 @@ static int tcp_open(URLContext *h, const char *uri, int flags)
     }
     return 0;
 
- fail:
-    if (cur_ai->ai_next) {
-        /* Retry with the next sockaddr */
-        cur_ai = cur_ai->ai_next;
-        if (fd >= 0)
-            closesocket(fd);
-        ret = 0;
-        goto restart;
-    }
  fail1:
     if (fd >= 0)
         closesocket(fd);
@@ -742,8 +777,10 @@ static int tcp_accept(URLContext *s, URLContext **c)
         return ret;
     cc = (*c)->priv_data;
     ret = ff_accept(sc->fd, sc->listen_timeout, s);
-    if (ret < 0)
+    if (ret < 0) {
+        ffurl_closep(c);
         return ret;
+    }
     cc->fd = ret;
     return 0;
 }
